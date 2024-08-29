@@ -1,0 +1,118 @@
+#lang scheme
+;; similaritySearch: Find the 5 closest intersection values to 1 between a query histogram and a dataset of histograms.
+;;
+;; queryFilename: The filename of the query histogram.
+;; imageDataset: The directory containing the dataset of histograms.
+;; Returns: A list of pairs where each pair consists of the intersection value and the filename of the histogram.
+(define (similaritySearch queryFilename imageDataset)
+  (define basePathQ "C:/Users/almis/IdeaProjects/CSI 2520/Projects/Project Scheme/Database/queryImages")
+  (define basePathD "C:/Users/almis/IdeaProjects/CSI 2520/Projects/Project Scheme/Database")
+  (define fullPathQ (construct-relative-path basePathQ queryFilename))
+  (define fullPathD (construct-relative-path basePathD imageDataset))
+  (define queryHistogram (read-hist-file fullPathQ))
+  (define datasetFilenames (list-text-files-in-directory fullPathD))
+  
+  ;; calculateSimilarity: Recursively calculate the similarity between the query histogram and each histogram in the dataset.
+  ;; queryHisto: The query histogram.
+  ;; filenames: The list of filenames of histograms in the dataset.
+  ;; result: Accumulator to store the intersection values and filenames.
+  (define (calculateSimilarity queryHisto filenames result)
+    (if (null? filenames)
+        (reverse result)
+        (let* ((datasetHisto (read-hist-file (construct-relative-path fullPathD (car filenames))))
+               (intersectionValue (compare queryHistogram datasetHisto)))
+          (calculateSimilarity queryHistogram (cdr filenames) (cons (cons intersectionValue (car filenames)) result)))))
+  
+  (define allIntersection (calculateSimilarity queryHistogram datasetFilenames '()))
+  
+  ;; Sort the list by the absolute difference from 1
+  (define sortedClosestTo1 (sort allIntersection 
+                                   (lambda (x y)
+                                     (< (abs (- (car x) 1))
+                                        (abs (- (car y) 1))))))
+  
+  ;; Take the first 5 elements
+  (take sortedClosestTo1 5))
+
+
+;; list-text-files-in-directory: Retrieve a list of filenames with the ".txt" extension from a given directory.
+;; directory-path: The path of the directory.
+;; Returns: A list of filenames.
+(define (list-text-files-in-directory directory-path)
+  (filter (lambda (file)
+            (string-suffix? file ".txt"))
+          (map path->string
+               (directory-list directory-path))))
+
+
+;; read-hist-file: Read the content of a histogram file.
+;; fullpath: The full path of the histogram file.
+;; Returns: A list containing the histogram data.
+(define (read-hist-file fullpath)
+  (call-with-input-file fullpath
+    (lambda (p)
+      (let f ((x (read p)))
+        (if (eof-object? x) '() (cons x (f (read p))))))))
+
+
+;; construct-relative-path: Construct a relative path from a base path and a relative part.
+;; base-path: The base path.
+;; relative-part: The relative part.
+;; Returns: The constructed relative path.
+(define (construct-relative-path base-path relative-part)
+  (string-append base-path "/" relative-part))
+
+
+(define (get-current-file-directory)
+  (path->string (current-load-relative-directory)))
+
+
+;; compare: Compare two histograms and calculate their intersection value.
+;; histogram1: The first histogram.
+;; histogram2: The second histogram.
+;; Returns: The intersection value.
+(define (compare histogram1 histogram2)
+  (let* ((normalizedHisto1 (normalize histogram1 '()))
+         (normalizedHisto2 (normalize histogram2 '()))
+         (intersectionVal (calculateIntersection normalizedHisto1 normalizedHisto2)))
+    intersectionVal))
+
+
+;; calculateIntersection: Calculate the intersection value between two histograms.
+;; histo1: The first histogram.
+;; histo2: The second histogram.
+;; Returns: The intersection value.
+(define (calculateIntersection histo1 histo2)
+  (define (calculateIntersectionHelper h1 h2 intersectionResult)
+    (cond
+      ((or (null? h1) (null? h2)) intersectionResult) ; Base case: If either histogram is empty, return intersectionResult
+      (else
+        (let ((intersection (min (car h1) (car h2)))) ; Calculate intersection between the first elements of the histograms
+          (calculateIntersectionHelper (cdr h1) (cdr h2) (+ intersectionResult intersection)))))) ; Recur with the rest of the histograms
+  (calculateIntersectionHelper histo1 histo2 0)) ; Start recursion with initial intersectionResult as 0
+
+
+;; normalize: Normalize the histogram data.
+;; histogram: The histogram data.
+;; normalizedHisto: The accumulator to store the normalized values.
+;; Returns: The list containing the normalized values.
+(define (normalize histogram normalizedHisto)
+  (if (null? histogram)
+      (reverse normalizedHisto)
+      (let ((normalized (exact->inexact (/ (car histogram) 172800.0))))
+        (normalize (cdr histogram) (cons normalized normalizedHisto)))))
+
+
+;; min: Get the minimum of two values.
+;; a: The first value.
+;; b: The second value.
+;; Returns: The minimum value.
+(define (min a b)
+  (if (< a b)
+      a
+      b))
+
+
+(display (similaritySearch "q15.jpg.txt" "imageDataset2_15_20"))
+
+
